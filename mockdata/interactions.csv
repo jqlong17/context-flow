@@ -1,0 +1,11 @@
+interaction_id,user_id,article_id,target_user_id,parent_interaction_id,type,content,translation,created_at,updated_at
+i1,u1,1,,,comment,This dialogue is so relatable! I always struggle with restaurant choices with my friends. The phrase 'you make a good point' is really useful - I've started using it in my daily conversations and it helps keep things positive!,这段对话太真实了！我和朋友选餐厅时总是很纠结。'you make a good point'这个短语很实用 - 我已经开始在日常对话中使用它了，这真的有助于保持对话积极的氛围！,2024-02-23 14:30:00+00,2025-02-22 13:27:31.065407+00
+i10,u5,2,,,favorite,,,2024-02-23 18:20:00+00,2025-02-22 13:27:31.065407+00
+i2,u2,1,u1,i1,reply,"The compromise strategy here is brilliant! Instead of just arguing, they found a win-win solution.",这里的妥协策略很棒！与其一直争论，他们找到了双赢的解决方案。,2024-02-23 15:45:00+00,2025-02-22 13:27:31.065407+00
+i3,u3,1,,,comment,Love how they use 'Actually...' to disagree politely! Been practicing this in my workplace.,很喜欢他们用'Actually...'来委婉地表达不同意见！我在工作中一直在练习这个。,2024-02-23 16:20:00+00,2025-02-22 13:27:31.065407+00
+i4,u4,2,,,comment,"This hybrid work discussion hits home! The phrase 'I understand your point, but...' is perfect for professional disagreements.","这个混合办公的讨论太贴切了！'I understand your point, but...'这个短语很适合在工作中表达不同意见。",2024-02-23 17:00:00+00,2025-02-22 13:27:31.065407+00
+i5,u5,2,u4,i4,reply,Totally agree! The expression 'the best of both worlds' is such a positive way to look at compromise.,'the best of both worlds'这个表达真的是看待妥协的很好方式。,2024-02-23 18:15:00+00,2025-02-22 13:27:31.065407+00
+i6,u1,1,,,like,,,2024-02-23 14:35:00+00,2025-02-22 13:27:31.065407+00
+i7,u2,1,,,like,,,2024-02-23 15:40:00+00,2025-02-22 13:27:31.065407+00
+i8,u3,2,,,like,,,2024-02-23 16:25:00+00,2025-02-22 13:27:31.065407+00
+i9,u4,1,,,favorite,,,2024-02-23 17:05:00+00,2025-02-22 13:27:31.065407+00
