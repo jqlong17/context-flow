@@ -15,6 +15,23 @@ interface DialogueContent {
   text: string;
 }
 
+interface DatabaseArticle {
+  article_id: number;
+  title: string;
+  content: string | DialogueContent[];
+  created_at: string;
+  user_id: string;
+  level: string;
+  tags: string[] | string;
+  likes_count: number;
+  comments_count: number;
+  favorites_count: number;
+  users: {
+    name: string;
+    avatar: string;
+  } | null;
+}
+
 interface Article {
   article_id: number;
   title: string;
@@ -92,7 +109,7 @@ async function getArticles() {
         likes_count,
         comments_count,
         favorites_count,
-        user:users (
+        users!articles_user_id_fkey (
           name,
           avatar
         )
@@ -118,14 +135,14 @@ async function getArticles() {
       数量: articles.length,
       第一篇: articles[0] ? {
         标题: articles[0].title,
-        作者: articles[0].user?.name || '未知',
+        作者: articles[0].users?.name || '未知',
         内容长度: typeof articles[0].content === 'string' 
           ? articles[0].content.length 
           : '非字符串'
       } : null
     });
 
-    return articles.map((article: any): Article => ({
+    return (articles as DatabaseArticle[]).map((article): Article => ({
       ...article,
       content: typeof article.content === 'string'
         ? JSON.parse(article.content)
@@ -134,7 +151,11 @@ async function getArticles() {
         ? article.tags 
         : typeof article.tags === 'string'
           ? article.tags.split(',').map((tag: string) => tag.trim())
-          : []
+          : [],
+      user: {
+        name: article.users?.name || '作者未知',
+        avatar: article.users?.avatar || '��'
+      }
     }));
   } catch (error) {
     console.error('处理文章数据时发生异常:', {
