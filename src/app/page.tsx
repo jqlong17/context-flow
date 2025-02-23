@@ -3,11 +3,6 @@ import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import InteractionButtons from '@/components/InteractionButtons';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
-
 interface User {
   user_id: string;
   name: string;
@@ -45,19 +40,10 @@ interface ArticleCounts {
 
 async function getArticles() {
   try {
-    // 先检查数据库连接
-    const { data: countData, error: connectionError } = await supabase.from('articles').select('count');
-    if (connectionError) {
-      console.error('数据库连接错误:', {
-        message: connectionError.message,
-        code: connectionError.code,
-        details: connectionError.details,
-        hint: connectionError.hint
-      });
-      return [];
-    }
-    
-    console.log('数据库连接成功，开始获取文章数据');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
 
     // 获取文章数据
     const { data: articles, error } = await supabase
@@ -81,12 +67,7 @@ async function getArticles() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('获取文章数据错误:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      });
+      console.error('获取文章数据错误:', error);
       return [];
     }
 
@@ -94,18 +75,6 @@ async function getArticles() {
       console.log('没有找到文章数据');
       return [];
     }
-
-    console.log('成功获取文章数据，原始数据:', articles);
-
-    // 添加调试日志
-    articles.forEach((article: any) => {
-      console.log('文章标签数据:', {
-        title: article.title,
-        rawTags: article.tags,
-        isArray: Array.isArray(article.tags),
-        type: typeof article.tags
-      });
-    });
 
     return articles.map((article: any): Article => ({
       ...article,
@@ -165,63 +134,70 @@ export default async function Home() {
           </button>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <Suspense fallback={
-            <div className="col-span-full text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-blue-500" />
-            </div>
-          }>
-            {articles.map((post: Article) => (
-              <Link key={post.article_id} href={`/post/${post.article_id}`} className="block">
-                <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow h-full">
-                  <div className="flex flex-col h-full p-4">
-                    <div className="flex-1">
-                      {/* 标题 */}
-                      <h2 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900">{post.title}</h2>
+        {!articles || articles.length === 0 ? (
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-600">暂无文章</h2>
+            <p className="text-gray-500 mt-2">请稍后再试</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <Suspense fallback={
+              <div className="col-span-full text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-blue-500" />
+              </div>
+            }>
+              {articles.map((post: Article) => (
+                <Link key={post.article_id} href={`/post/${post.article_id}`} className="block">
+                  <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow h-full">
+                    <div className="flex flex-col h-full p-4">
+                      <div className="flex-1">
+                        {/* 标题 */}
+                        <h2 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900">{post.title}</h2>
 
-                      {/* 标签信息 */}
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {Array.isArray(post.tags) && post.tags.map((tag, index) => (
-                          <span 
-                            key={index} 
-                            className="inline-block text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full whitespace-nowrap"
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                        {/* 标签信息 */}
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {Array.isArray(post.tags) && post.tags.map((tag, index) => (
+                            <span 
+                              key={index} 
+                              className="inline-block text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full whitespace-nowrap"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* 文章内容 */}
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {post.content?.[0] 
+                            ? `${post.content[0].speaker}: ${post.content[0].text}` 
+                            : '暂无内容'}
+                        </p>
                       </div>
 
-                      {/* 文章内容 */}
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {post.content?.[0] 
-                          ? `${post.content[0].speaker}: ${post.content[0].text}` 
-                          : '暂无内容'}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      {/* 底部作者信息和互动数据 */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2 flex-1 min-w-0">
-                          <div className="text-2xl">{post.user.avatar || '👤'}</div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-900 truncate">{post.user.name || '作者未知'}</div>
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        {/* 底部作者信息和互动数据 */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <div className="text-2xl">{post.user.avatar || '👤'}</div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">{post.user.name || '作者未知'}</div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end ml-6">
-                          <InteractionButtons
-                            articleId={post.article_id}
-                            initialLikes={post.likes_count}
-                          />
+                          <div className="flex flex-col items-end ml-6">
+                            <InteractionButtons
+                              articleId={post.article_id}
+                              initialLikes={post.likes_count}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </Suspense>
-        </div>
+                </Link>
+              ))}
+            </Suspense>
+          </div>
+        )}
       </div>
 
       {/* 底部导航栏 */}
