@@ -81,7 +81,7 @@ async function getArticles() {
     // 获取文章数据
     const { data: articles, error } = await supabase
       .from('articles')
-      .select(\`
+      .select(`
         article_id,
         title,
         content,
@@ -96,7 +96,7 @@ async function getArticles() {
           name,
           avatar
         )
-      \`)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -116,13 +116,13 @@ async function getArticles() {
 
     console.log('成功获取文章:', {
       数量: articles.length,
-      第一篇: {
+      第一篇: articles[0] ? {
         标题: articles[0].title,
-        作者: articles[0].user?.name,
+        作者: articles[0].user?.name || '未知',
         内容长度: typeof articles[0].content === 'string' 
           ? articles[0].content.length 
           : '非字符串'
-      }
+      } : null
     });
 
     return articles.map((article: any): Article => ({
@@ -155,13 +155,13 @@ function formatDate(dateString: string) {
   // 小于24小时显示"x小时前"
   if (diff < 24 * 60 * 60 * 1000) {
     const hours = Math.floor(diff / (60 * 60 * 1000));
-    return `${hours}小时前`;
+    return hours + '小时前';
   }
   
   // 小于30天显示"x天前"
   if (diff < 30 * 24 * 60 * 60 * 1000) {
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-    return `${days}天前`;
+    return days + '天前';
   }
   
   // 其他情况显示具体日期
