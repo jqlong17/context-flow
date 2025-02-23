@@ -64,39 +64,43 @@ async function getArticles() {
     // 移除可能的尾部斜杠
     supabaseUrl = supabaseUrl.replace(/\/$/, '');
     
-    console.log('Supabase 配置:', {
-      url: supabaseUrl,
-      keyLength: supabaseKey.length,
-      keyStart: supabaseKey.substring(0, 10) + '...'
-    });
+    console.log('=== Supabase 配置 ===');
+    console.log('URL:', supabaseUrl);
+    console.log('Key长度:', supabaseKey.length);
+    console.log('Key前10位:', supabaseKey.substring(0, 10));
+    console.log('===================');
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('Supabase 配置缺失');
       return [];
     }
 
+    console.log('正在创建 Supabase 客户端...');
     const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('Supabase 客户端创建成功');
 
     // 先尝试一个简单的查询来测试连接
+    console.log('正在测试数据库连接...');
     const { data: testData, error: testError } = await supabase
       .from('articles')
-      .select('count')
-      .limit(1);
+      .select('count');
 
     if (testError) {
       console.error('数据库连接测试失败:', {
         message: testError.message,
         code: testError.code,
         details: testError.details,
-        hint: testError.hint
+        hint: testError.hint,
+        status: testError.status
       });
       return [];
     }
 
-    console.log('数据库连接测试成功，文章数量:', testData);
+    console.log('数据库连接测试成功，开始查询文章');
+    console.log('测试查询结果:', testData);
 
     // 获取文章数据
-    const { data: articles, error } = await supabase
+    const query = supabase
       .from('articles')
       .select(`
         article_id,
@@ -116,12 +120,17 @@ async function getArticles() {
       `)
       .order('created_at', { ascending: false });
 
+    console.log('执行查询:', query.toURL());
+    
+    const { data: articles, error } = await query;
+
     if (error) {
       console.error('获取文章数据错误:', {
         message: error.message,
         code: error.code,
         details: error.details,
-        hint: error.hint
+        hint: error.hint,
+        status: error.status
       });
       return [];
     }
@@ -131,32 +140,45 @@ async function getArticles() {
       return [];
     }
 
-    console.log('成功获取文章:', {
-      数量: articles.length,
-      第一篇: articles[0] ? {
-        标题: articles[0].title,
-        作者: articles[0].users?.name || '未知',
-        内容长度: typeof articles[0].content === 'string' 
-          ? articles[0].content.length 
-          : '非字符串'
-      } : null
+    console.log('=== 成功获取文章 ===');
+    console.log('文章数量:', articles.length);
+    console.log('第一篇文章:', {
+      id: articles[0].article_id,
+      title: articles[0].title,
+      userId: articles[0].user_id,
+      hasContent: !!articles[0].content,
+      contentType: typeof articles[0].content,
+      hasUser: !!articles[0].users,
+      userInfo: articles[0].users
+    });
+    console.log('===================');
+
+    const processedArticles = (articles as DatabaseArticle[]).map((article): Article => {
+      console.log(`处理文章 ${article.article_id}:`, {
+        contentType: typeof article.content,
+        tagsType: typeof article.tags,
+        hasUser: !!article.users
+      });
+
+      return {
+        ...article,
+        content: typeof article.content === 'string'
+          ? JSON.parse(article.content)
+          : article.content || [],
+        tags: Array.isArray(article.tags) 
+          ? article.tags 
+          : typeof article.tags === 'string'
+            ? article.tags.split(',').map((tag: string) => tag.trim())
+            : [],
+        user: {
+          name: article.users?.name || '作者未知',
+          avatar: article.users?.avatar || '👤'
+        }
+      };
     });
 
-    return (articles as DatabaseArticle[]).map((article): Article => ({
-      ...article,
-      content: typeof article.content === 'string'
-        ? JSON.parse(article.content)
-        : article.content || [],
-      tags: Array.isArray(article.tags) 
-        ? article.tags 
-        : typeof article.tags === 'string'
-          ? article.tags.split(',').map((tag: string) => tag.trim())
-          : [],
-      user: {
-        name: article.users?.name || '作者未知',
-        avatar: article.users?.avatar || '��'
-      }
-    }));
+    console.log('数据处理完成，返回文章数量:', processedArticles.length);
+    return processedArticles;
   } catch (error) {
     console.error('处理文章数据时发生异常:', {
       错误类型: error?.constructor?.name,
