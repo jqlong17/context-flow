@@ -11,8 +11,8 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // 创建 Supabase 客户端
 const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_ANON_KEY || ''
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
 // API配置
@@ -745,7 +745,7 @@ async function saveToCSV(articles: Article[]) {
 // 将文章保存到 Supabase
 async function saveToSupabase(articles: Article[]) {
   console.log('\n=== 开始保存文章到数据库 ===');
-  console.log('数据库URL:', process.env.SUPABASE_URL);
+  console.log('数据库URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
   console.log('准备保存文章数量:', articles.length);
   
   for (const article of articles) {
@@ -868,9 +868,9 @@ async function main() {
   try {
     // 检查环境变量
     const requiredEnvVars = {
-      'SUPABASE_URL': process.env.SUPABASE_URL,
-      'SUPABASE_ANON_KEY': process.env.SUPABASE_ANON_KEY,
-      'ZHIPU_API_KEY': process.env.ZHIPU_API_KEY
+      'NEXT_PUBLIC_SUPABASE_URL': process.env.NEXT_PUBLIC_SUPABASE_URL,
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      'NEXT_PUBLIC_ZHIPU_API_KEY': process.env.NEXT_PUBLIC_ZHIPU_API_KEY
     };
 
     const missingEnvVars = Object.entries(requiredEnvVars)
@@ -882,7 +882,7 @@ async function main() {
     }
 
     console.log('\n=== 环境检查 ===');
-    console.log('Supabase URL:', process.env.SUPABASE_URL);
+    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
     console.log('API配置已完成');
     
     const count = process.argv[2] ? parseInt(process.argv[2]) : 1;
