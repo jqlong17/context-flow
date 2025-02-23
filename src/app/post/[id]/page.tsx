@@ -5,8 +5,14 @@ import Link from 'next/link';
 import { useState, useEffect, use } from 'react';
 import ChatBubble from '@/components/ChatBubble';
 import VocabCard from '@/components/VocabCard';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import CommentInput from '@/components/CommentInput';
+import CommentSection from '@/components/CommentSection';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 interface Vocabulary {
   word: string;
@@ -24,12 +30,18 @@ interface KeyPhrase {
   translation?: string;
 }
 
+interface DialogueContent {
+  speaker: string;
+  text: string;
+}
+
 interface Post {
-  article_id: string;
+  article_id: number;
   title: string;
-  content: string;
+  content: DialogueContent[];
   level: string;
   topic: string;
+  tags: string[];
   vocabularies: Vocabulary[];
   key_phrases: KeyPhrase[];
   learning_points: string[];
@@ -81,6 +93,7 @@ const groupPhrasesByCategory = (phrases: KeyPhrase[]) => {
   }, {} as Record<string, KeyPhrase[]>);
 };
 
+// 修改 categoryStyles 定义，添加默认样式
 const categoryStyles = {
   expression: {
     bg: 'bg-blue-50',
@@ -105,8 +118,37 @@ const categoryStyles = {
     text: 'text-yellow-700',
     title: 'text-yellow-800',
     heading: '常用连接词'
+  },
+  default: {
+    bg: 'bg-gray-50',
+    text: 'text-gray-700',
+    title: 'text-gray-800',
+    heading: '其他'
   }
 } as const;
+
+type CategoryStyleKey = keyof typeof categoryStyles;
+
+// 获取类别样式的辅助函数
+const getCategoryStyle = (category: string) => {
+  const key = category as CategoryStyleKey;
+  return categoryStyles[key] || categoryStyles.default;
+};
+
+// 添加高亮文本处理函数
+const highlightText = (text: string, highlights: string[]) => {
+  if (!highlights.length) return text;
+  
+  const regex = new RegExp(`(${highlights.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return parts.map((part, index) => {
+    if (highlights.some(h => h.toLowerCase() === part.toLowerCase())) {
+      return `<span class="bg-yellow-100 px-0.5 rounded">${part}</span>`;
+    }
+    return part;
+  }).join('');
+};
 
 export default function PostPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -146,15 +188,18 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
         // 处理 JSON 字段
         const processedArticle = {
           ...article,
+          content: typeof article.content === 'string'
+            ? JSON.parse(article.content)
+            : article.content || [],
           vocabularies: typeof article.vocabularies === 'string' 
             ? JSON.parse(article.vocabularies) 
-            : article.vocabularies,
+            : article.vocabularies || [],
           key_phrases: typeof article.key_phrases === 'string' 
             ? JSON.parse(article.key_phrases) 
-            : article.key_phrases,
+            : article.key_phrases || [],
           learning_points: typeof article.learning_points === 'string' 
             ? JSON.parse(article.learning_points) 
-            : article.learning_points
+            : article.learning_points || []
         };
 
         setPost(processedArticle);
@@ -223,7 +268,8 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
     notFound();
   }
 
-  const conversations = post.content.split('\\n').filter((line: string) => line.trim() !== '');
+  // 修改对话内容的处理方式
+  const conversations = post.content;
   const vocabularies = post.vocabularies;
   const keyPhrases = post.key_phrases;
   const learningPoints = post.learning_points;
@@ -265,42 +311,37 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
 
           <div className="border-t border-gray-100 -mx-6 mb-4"></div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">{post.title}</h1>
-          
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{post.title}</h1>
+            <div className="flex gap-2">
+              <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
                 难度: {post.level}
               </span>
-              <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-                话题: {post.topic}
-              </span>
+              {post.tags && post.tags.map((tag: string) => (
+                <span key={tag} className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
 
-          <div className="space-y-4">
-            {conversations.map((line: string, index: number) => {
-              const [speaker, message] = line.split(': ').map(str => str.trim());
-              const isAction = message && (message.startsWith('*') && message.endsWith('*'));
-              
-              if (!message) return null;
-
-              if (isAction) {
-                return (
-                  <div key={index} className="text-center text-sm text-gray-500 italic my-2">
-                    {speaker}
-                  </div>
-                );
-              }
+          <div className="space-y-4 mb-8">
+            {conversations.map((dialogue, index) => {
+              const isFirstSpeaker = index === 0 ? true : dialogue.speaker !== conversations[index - 1].speaker;
+              const alignment = dialogue.speaker === conversations[0].speaker ? 'justify-start' : 'justify-end';
+              const bgColor = dialogue.speaker === conversations[0].speaker ? 'bg-blue-50' : 'bg-green-50';
+              const highlightedText = highlightText(dialogue.text, highlights);
 
               return (
-                <ChatBubble
-                  key={index}
-                  message={message}
-                  speaker={speaker}
-                  isRight={index % 2 === 1}
-                  highlights={highlights}
-                />
+                <div key={index} className={`flex ${alignment}`}>
+                  <div className={`max-w-[80%] ${bgColor} rounded-lg px-4 py-2`}>
+                    <div className="text-sm font-medium text-gray-900 mb-1">{dialogue.speaker}</div>
+                    <div 
+                      className="text-gray-800"
+                      dangerouslySetInnerHTML={{ __html: highlightedText }}
+                    />
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -325,34 +366,37 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
           <div className="mt-8 pt-6 border-t">
             <h2 className="text-xl font-semibold mb-4">学习要点</h2>
             <div className="space-y-4">
-              {Object.entries(groupedPhrases).map(([category, phrases]) => (
-                <div
-                  key={category}
-                  className={`${categoryStyles[category as keyof typeof categoryStyles].bg} rounded-lg p-4`}
-                >
-                  <h3 className={`font-medium ${categoryStyles[category as keyof typeof categoryStyles].title} mb-2`}>
-                    {categoryStyles[category as keyof typeof categoryStyles].heading}
-                  </h3>
-                  <ul className="list-disc list-inside space-y-1">
-                    {phrases.map((phrase: KeyPhrase, index: number) => (
-                      <li key={index}>
-                        <span className={`font-bold ${categoryStyles[category as keyof typeof categoryStyles].text}`}>
-                          {phrase.phrase}
-                        </span>
-                        <span className={categoryStyles[category as keyof typeof categoryStyles].text}>
-                          {' - ' + phrase.meaning}
-                        </span>
-                        {phrase.example && (
-                          <div className="ml-5 mt-1">
-                            <p className="text-sm text-gray-600">{phrase.example}</p>
-                            <p className="text-sm text-gray-500">{phrase.translation}</p>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+              {Object.entries(groupedPhrases).map(([category, phrases]) => {
+                const style = getCategoryStyle(category);
+                return (
+                  <div
+                    key={category}
+                    className={`${style.bg} rounded-lg p-4`}
+                  >
+                    <h3 className={`font-medium ${style.title} mb-2`}>
+                      {style.heading}
+                    </h3>
+                    <ul className="list-disc list-inside space-y-1">
+                      {phrases.map((phrase: KeyPhrase, index: number) => (
+                        <li key={index}>
+                          <span className={`font-bold ${style.text}`}>
+                            {phrase.phrase}
+                          </span>
+                          <span className={style.text}>
+                            {' - ' + phrase.meaning}
+                          </span>
+                          {phrase.example && (
+                            <div className="ml-5 mt-1">
+                              <p className="text-sm text-gray-600">{phrase.example}</p>
+                              <p className="text-sm text-gray-500">{phrase.translation}</p>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
 
             {learningPoints && (
@@ -526,6 +570,9 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
           }
         }}
       />
+
+      {/* 评论组件 */}
+      <CommentSection articleId={post.article_id} />
     </main>
   );
 } 

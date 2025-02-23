@@ -1,7 +1,12 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import InteractionButtons from '@/components/InteractionButtons';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 interface User {
   user_id: string;
@@ -10,42 +15,36 @@ interface User {
   style_description: string;
 }
 
-interface Article {
-  article_id: string;
-  title: string;
-  content: string;
-  level: string;
-  topic: string;
-  created_at: string;
-  vocabularies: any[];
-  key_phrases: any[];
-  learning_points: string[];
-  likes_count: number;
-  favorites_count: number;
-  comments_count: number;
-  users: User;
+interface DialogueContent {
+  speaker: string;
+  text: string;
 }
 
-type SupabaseArticle = {
-  article_id: string;
+interface Article {
+  article_id: number;
   title: string;
-  content: string;
-  level: string;
-  topic: string;
+  content: Array<{
+    speaker: string;
+    text: string;
+  }>;
   created_at: string;
-  vocabularies: string | any[];
-  key_phrases: string | any[];
-  learning_points: string | string[];
+  user_id: string;
+  level: string;
+  tags: string[];
   likes_count: number;
-  favorites_count: number;
   comments_count: number;
-  users: {
-    user_id: string;
+  favorites_count: number;
+  user: {
     name: string;
     avatar: string;
-    style_description: string;
   };
-};
+}
+
+interface ArticleCounts {
+  likes_count: number;
+  comments_count: number;
+  favorites_count: number;
+}
 
 async function getArticles() {
   try {
@@ -67,12 +66,19 @@ async function getArticles() {
     const { data: articles, error } = await supabase
       .from('articles')
       .select(`
-        *,
-        users (
-          user_id,
+        article_id,
+        title,
+        content,
+        created_at,
+        user_id,
+        level,
+        tags,
+        likes_count,
+        comments_count,
+        favorites_count,
+        user:users (
           name,
-          avatar,
-          style_description
+          avatar
         )
       `)
       .order('created_at', { ascending: false });
@@ -82,8 +88,7 @@ async function getArticles() {
         message: error.message,
         code: error.code,
         details: error.details,
-        hint: error.hint,
-        status: error.status
+        hint: error.hint
       });
       return [];
     }
@@ -95,18 +100,27 @@ async function getArticles() {
 
     console.log('成功获取文章数据，原始数据:', articles);
 
-    return articles.map(article => ({
+    // 添加调试日志
+    articles.forEach((article: Article) => {
+      console.log('文章标签数据:', {
+        title: article.title,
+        rawTags: article.tags,
+        isArray: Array.isArray(article.tags),
+        type: typeof article.tags
+      });
+    });
+
+    return articles.map((article: Article): Article => ({
       ...article,
-      vocabularies: typeof article.vocabularies === 'string' 
-        ? JSON.parse(article.vocabularies) 
-        : article.vocabularies || [],
-      key_phrases: typeof article.key_phrases === 'string'
-        ? JSON.parse(article.key_phrases)
-        : article.key_phrases || [],
-      learning_points: typeof article.learning_points === 'string'
-        ? JSON.parse(article.learning_points)
-        : article.learning_points || []
-    })) as Article[];
+      content: typeof article.content === 'string'
+        ? JSON.parse(article.content)
+        : article.content || [],
+      tags: Array.isArray(article.tags) 
+        ? article.tags 
+        : typeof article.tags === 'string'
+          ? article.tags.split(',').map(tag => tag.trim())
+          : []
+    }));
   } catch (error) {
     console.error('处理文章数据时发生异常:', error);
     return [];
@@ -154,7 +168,7 @@ export default async function Home() {
           </button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <Suspense fallback={
             <div className="col-span-full text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-blue-500" />
@@ -163,57 +177,47 @@ export default async function Home() {
             {articles.map((post: Article) => (
               <Link key={post.article_id} href={`/post/${post.article_id}`} className="block">
                 <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow h-full">
-                  <div className="p-4">
-                    {/* 标题 */}
-                    <h2 className="text-lg font-semibold mb-3 line-clamp-2 text-gray-900">{post.title}</h2>
+                  <div className="flex flex-col h-full p-4">
+                    <div className="flex-1">
+                      {/* 标题 */}
+                      <h2 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900">{post.title}</h2>
 
-                    {/* 文章内容 */}
-                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                      {post.content.split('\\n')[0]}
-                    </p>
+                      {/* 标签信息 */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {Array.isArray(post.tags) && post.tags.map((tag, index) => (
+                          <span 
+                            key={index} 
+                            className="inline-block text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full whitespace-nowrap"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
 
-                    {/* 标签信息 */}
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-                        难度: {post.level}
-                      </span>
-                      <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-                        话题: {post.topic}
-                      </span>
-                      <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-                        {post.vocabularies.length} 个生词
-                      </span>
+                      {/* 文章内容 */}
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {post.content?.[0] 
+                          ? `${post.content[0].speaker}: ${post.content[0].text}` 
+                          : '暂无内容'}
+                      </p>
                     </div>
 
-                    {/* 互动数据 */}
-                    <div className="mb-4">
-                      <InteractionButtons
-                        articleId={post.article_id}
-                        initialLikes={post.likes_count}
-                        initialFavorites={post.favorites_count}
-                        initialComments={post.comments_count}
-                      />
-                      <span className="text-xs text-gray-500 ml-4">{formatDate(post.created_at)}</span>
-                    </div>
-
-                    {/* 分隔线 */}
-                    <div className="border-t border-gray-100 -mx-4 mb-3"></div>
-
-                    {/* 底部作者信息和操作区 */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="text-2xl">{post.users?.avatar || '👤'}</div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{post.users?.name || '作者未知'}</div>
-                          <div className="text-xs text-gray-500 line-clamp-1">{post.users?.style_description || '暂无描述'}</div>
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      {/* 底部作者信息和互动数据 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                          <div className="text-2xl">{post.user.avatar || '👤'}</div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-900 truncate">{post.user.name || '作者未知'}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end ml-6">
+                          <InteractionButtons
+                            articleId={post.article_id}
+                            initialLikes={post.likes_count}
+                          />
                         </div>
                       </div>
-                      <span className="text-xs text-blue-600 hover:text-blue-800 flex items-center">
-                        查看详情
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </span>
                     </div>
                   </div>
                 </div>
