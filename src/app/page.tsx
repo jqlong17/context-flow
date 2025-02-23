@@ -23,10 +23,7 @@ interface DialogueContent {
 interface Article {
   article_id: number;
   title: string;
-  content: Array<{
-    speaker: string;
-    text: string;
-  }>;
+  content: DialogueContent[];
   created_at: string;
   user_id: string;
   level: string;
@@ -101,7 +98,7 @@ async function getArticles() {
     console.log('成功获取文章数据，原始数据:', articles);
 
     // 添加调试日志
-    articles.forEach((article: Article) => {
+    articles.forEach((article: any) => {
       console.log('文章标签数据:', {
         title: article.title,
         rawTags: article.tags,
@@ -110,7 +107,7 @@ async function getArticles() {
       });
     });
 
-    return articles.map((article: Article): Article => ({
+    return articles.map((article: any): Article => ({
       ...article,
       content: typeof article.content === 'string'
         ? JSON.parse(article.content)
@@ -118,7 +115,7 @@ async function getArticles() {
       tags: Array.isArray(article.tags) 
         ? article.tags 
         : typeof article.tags === 'string'
-          ? article.tags.split(',').map(tag => tag.trim())
+          ? article.tags.split(',').map((tag: string) => tag.trim())
           : []
     }));
   } catch (error) {
