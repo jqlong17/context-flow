@@ -1,17 +1,19 @@
-"use client";
-
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect, use } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import ChatBubble from '@/components/ChatBubble';
 import VocabCard from '@/components/VocabCard';
-import { createClient } from '@supabase/supabase-js';
 import CommentInput from '@/components/CommentInput';
 import CommentSection from '@/components/CommentSection';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+  {
+    auth: {
+      persistSession: false
+    }
+  }
 );
 
 interface Vocabulary {
@@ -40,7 +42,6 @@ interface Post {
   title: string;
   content: DialogueContent[];
   level: string;
-  topic: string;
   tags: string[];
   vocabularies: Vocabulary[];
   key_phrases: KeyPhrase[];
@@ -55,23 +56,6 @@ interface Post {
   likes_count: number;
   favorites_count: number;
   comments_count: number;
-}
-
-// 添加评论接口
-interface Comment {
-  interaction_id: string;
-  user_id: string;
-  content: string;
-  translation?: string;
-  created_at: string;
-  type: 'comment' | 'reply';
-  parent_interaction_id?: string;
-  users: {
-    user_id: string;
-    name: string;
-    avatar: string;
-  };
-  replies?: Comment[];
 }
 
 // 获取所有需要高亮的单词和短语
@@ -150,125 +134,73 @@ const highlightText = (text: string, highlights: string[]) => {
   }).join('');
 };
 
-export default function PostPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const [post, setPost] = useState<Post | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isCommentInputVisible, setIsCommentInputVisible] = useState(false);
+async function getPost(id: string) {
+  try {
+    console.log('Fetching post with ID:', id);
+    const { data: post, error } = await supabase
+      .from('articles')
+      .select(`
+        article_id,
+        title,
+        content,
+        level,
+        tags,
+        vocabularies,
+        key_phrases,
+        learning_points,
+        user_id,
+        likes_count,
+        comments_count,
+        favorites_count,
+        users!articles_user_id_fkey (
+          user_id,
+          name,
+          avatar,
+          style_description
+        )
+      `)
+      .eq('article_id', id)
+      .single();
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // 获取文章数据和作者信息
-        const { data: article, error: articleError } = await supabase
-          .from('articles')
-          .select(`
-            *,
-            users (
-              user_id,
-              name,
-              avatar,
-              style_description
-            )
-          `)
-          .eq('article_id', resolvedParams.id)
-          .single();
-
-        if (articleError) {
-          console.error('Error fetching article:', articleError);
-          return;
-        }
-
-        if (!article) {
-          console.error('Article not found');
-          return;
-        }
-
-        // 处理 JSON 字段
-        const processedArticle = {
-          ...article,
-          content: typeof article.content === 'string'
-            ? JSON.parse(article.content)
-            : article.content || [],
-          vocabularies: typeof article.vocabularies === 'string' 
-            ? JSON.parse(article.vocabularies) 
-            : article.vocabularies || [],
-          key_phrases: typeof article.key_phrases === 'string' 
-            ? JSON.parse(article.key_phrases) 
-            : article.key_phrases || [],
-          learning_points: typeof article.learning_points === 'string' 
-            ? JSON.parse(article.learning_points) 
-            : article.learning_points || []
-        };
-
-        setPost(processedArticle);
-
-        // 获取评论数据
-        const { data: commentsData, error: commentsError } = await supabase
-          .from('interactions')
-          .select(`
-            interaction_id,
-            user_id,
-            content,
-            translation,
-            created_at,
-            type,
-            parent_interaction_id,
-            users!interactions_user_id_fkey (
-              user_id,
-              name,
-              avatar
-            )
-          `)
-          .eq('article_id', resolvedParams.id)
-          .in('type', ['comment', 'reply'])
-          .order('created_at', { ascending: true });
-
-        if (commentsError) {
-          console.error('Error fetching comments:', commentsError);
-        } else {
-          // 组织评论树结构
-          const commentTree = (commentsData || []).reduce<Comment[]>((acc, comment) => {
-            const typedComment = comment as unknown as Comment;
-            if (typedComment.type === 'reply' && typedComment.parent_interaction_id) {
-              const parentComment = acc.find(c => c.interaction_id === typedComment.parent_interaction_id);
-              if (parentComment) {
-                parentComment.replies = parentComment.replies || [];
-                parentComment.replies.push(typedComment);
-              }
-              return acc;
-            }
-            acc.push({ ...typedComment, replies: [] });
-            return acc;
-          }, []);
-
-          setComments(commentTree);
-        }
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setIsLoading(false);
-      }
+    if (error) {
+      console.error('Error fetching post:', error);
+      return null;
     }
 
-    fetchData();
-  }, [resolvedParams.id]);
+    if (!post || !post.users) {
+      console.log('No post found with ID:', id);
+      return null;
+    }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500" />
-      </div>
-    );
+    console.log('Post data:', post);
+
+    // 处理数据
+    const processedPost = {
+      ...post,
+      content: typeof post.content === 'string' ? JSON.parse(post.content) : post.content || [],
+      vocabularies: typeof post.vocabularies === 'string' ? JSON.parse(post.vocabularies) : post.vocabularies || [],
+      key_phrases: typeof post.key_phrases === 'string' ? JSON.parse(post.key_phrases) : post.key_phrases || [],
+      learning_points: typeof post.learning_points === 'string' ? JSON.parse(post.learning_points) : post.learning_points || [],
+      tags: Array.isArray(post.tags) ? post.tags : typeof post.tags === 'string' ? post.tags.split(',').map(tag => tag.trim()) : [],
+      users: Array.isArray(post.users) ? post.users[0] : post.users
+    } as Post;
+
+    return processedPost;
+  } catch (error) {
+    console.error('Error in getPost:', error);
+    return null;
   }
+}
+
+export default async function PostPage({ params }: { params: { id: string } }) {
+  console.log('Rendering PostPage with ID:', params.id);
+  const post = await getPost(params.id);
 
   if (!post) {
+    console.log('Post not found, redirecting to 404');
     notFound();
   }
 
-  // 修改对话内容的处理方式
   const conversations = post.content;
   const vocabularies = post.vocabularies;
   const keyPhrases = post.key_phrases;
@@ -276,7 +208,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
   const highlights = getHighlights(post);
   const groupedPhrases = groupPhrasesByCategory(keyPhrases);
   const author = post.users;
-  
+
   return (
     <main className="min-h-screen bg-gray-50 pb-16">
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -416,53 +348,8 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
 
         {/* 评论区域 */}
         <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-6">评论 ({comments.length})</h2>
-          <div className="space-y-6">
-            {comments.map((comment) => (
-              <div key={comment.interaction_id} className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">{comment.users.avatar}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-gray-900">{comment.users.name}</h3>
-                      <span className="text-sm text-gray-500">
-                        {new Date(comment.created_at).toLocaleDateString('zh-CN')}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-gray-800">{comment.content}</p>
-                    {comment.translation && (
-                      <p className="mt-1 text-gray-600 text-sm">{comment.translation}</p>
-                    )}
-
-                    {/* 回复列表 */}
-                    {comment.replies && comment.replies.length > 0 && (
-                      <div className="mt-4 ml-6 space-y-4">
-                        {comment.replies.map((reply) => (
-                          <div key={reply.interaction_id} className="bg-white rounded-lg p-3">
-                            <div className="flex items-start space-x-3">
-                              <div className="text-xl">{reply.users.avatar}</div>
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <h4 className="font-medium text-gray-900">{reply.users.name}</h4>
-                                  <span className="text-xs text-gray-500">
-                                    {new Date(reply.created_at).toLocaleDateString('zh-CN')}
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-gray-800">{reply.content}</p>
-                                {reply.translation && (
-                                  <p className="mt-1 text-gray-600 text-sm">{reply.translation}</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-xl font-semibold mb-6">评论</h2>
+          <CommentSection articleId={post.article_id} />
         </div>
       </div>
 
@@ -475,7 +362,6 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
               type="text"
               placeholder="写下你的想法..."
               className="w-full h-10 px-4 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onClick={() => setIsCommentInputVisible(true)}
               readOnly
             />
           </div>
@@ -494,10 +380,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
               </svg>
               <span className="ml-1 text-sm">{post.favorites_count || 0}</span>
             </button>
-            <button 
-              className="flex items-center text-gray-600 hover:text-blue-600"
-              onClick={() => setIsCommentInputVisible(true)}
-            >
+            <button className="flex items-center text-gray-600 hover:text-blue-600">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
@@ -506,73 +389,6 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
-
-      {/* 评论输入组件 */}
-      <CommentInput
-        articleId={resolvedParams.id}
-        isVisible={isCommentInputVisible}
-        onClose={() => setIsCommentInputVisible(false)}
-        onSubmit={async () => {
-          // 重新获取评论数据
-          const { data: commentsData, error: commentsError } = await supabase
-            .from('interactions')
-            .select(`
-              interaction_id,
-              user_id,
-              content,
-              translation,
-              created_at,
-              type,
-              parent_interaction_id,
-              users!interactions_user_id_fkey (
-                user_id,
-                name,
-                avatar
-              )
-            `)
-            .eq('article_id', resolvedParams.id)
-            .in('type', ['comment', 'reply'])
-            .order('created_at', { ascending: true });
-
-          if (commentsError) {
-            console.error('Error fetching comments:', commentsError);
-          } else {
-            // 组织评论树结构
-            const commentTree = (commentsData || []).reduce<Comment[]>((acc, comment) => {
-              const typedComment = comment as unknown as Comment;
-              if (typedComment.type === 'reply' && typedComment.parent_interaction_id) {
-                const parentComment = acc.find(c => c.interaction_id === typedComment.parent_interaction_id);
-                if (parentComment) {
-                  parentComment.replies = parentComment.replies || [];
-                  parentComment.replies.push(typedComment);
-                }
-                return acc;
-              }
-              acc.push({ ...typedComment, replies: [] });
-              return acc;
-            }, []);
-
-            setComments(commentTree);
-          }
-
-          // 重新获取文章数据以更新计数
-          const { data: article } = await supabase
-            .from('articles')
-            .select('*')
-            .eq('article_id', resolvedParams.id)
-            .single();
-
-          if (article) {
-            setPost(prevPost => ({
-              ...prevPost!,
-              comments_count: article.comments_count
-            }));
-          }
-        }}
-      />
-
-      {/* 评论组件 */}
-      <CommentSection articleId={post.article_id} />
     </main>
   );
 } 

@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import InteractionButtons from '@/components/InteractionButtons';
+import ArticleList from '@/components/ArticleList';
 
 interface User {
   user_id: string;
@@ -215,9 +216,7 @@ function formatDate(dateString: string) {
   });
 }
 
-export default async function Home() {
-  const articles = await getArticles();
-
+export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 pb-16">
       <div className="container mx-auto px-4 py-6">
@@ -230,70 +229,7 @@ export default async function Home() {
           </button>
         </div>
         
-        {!articles || articles.length === 0 ? (
-          <div className="text-center py-12">
-            <h2 className="text-xl font-semibold text-gray-600">暂无文章</h2>
-            <p className="text-gray-500 mt-2">请稍后再试</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <Suspense fallback={
-              <div className="col-span-full text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-blue-500" />
-              </div>
-            }>
-              {articles.map((post: Article) => (
-                <Link key={post.article_id} href={`/post/${post.article_id}`} className="block">
-                  <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow h-full">
-                    <div className="flex flex-col h-full p-4">
-                      <div className="flex-1">
-                        {/* 标题 */}
-                        <h2 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900">{post.title}</h2>
-
-                        {/* 标签信息 */}
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {Array.isArray(post.tags) && post.tags.map((tag, index) => (
-                            <span 
-                              key={index} 
-                              className="inline-block text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full whitespace-nowrap"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* 文章内容 */}
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {post.content?.[0] 
-                            ? `${post.content[0].speaker}: ${post.content[0].text}` 
-                            : '暂无内容'}
-                        </p>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-gray-100">
-                        {/* 底部作者信息和互动数据 */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2 flex-1 min-w-0">
-                            <div className="text-2xl">{post.user.avatar || '👤'}</div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-900 truncate">{post.user.name || '作者未知'}</div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end ml-6">
-                            <InteractionButtons
-                              articleId={post.article_id}
-                              initialLikes={post.likes_count}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </Suspense>
-          </div>
-        )}
+        <ArticleList />
       </div>
 
       {/* 底部导航栏 */}
